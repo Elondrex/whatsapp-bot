@@ -1,15 +1,26 @@
+const express = require('express');
 const path = require('path');
 const config = require('./config');
-const { connect, getandRequirePlugins, requireJS } = require('./lib');
+const { delay } = require('baileys');
+const { connect, getandRequirePlugins } = require('./lib');
+const { requireJS } = require('./utils');
+const { SessionManager } = require('./client');
+const app = express();
+const PORT = process.env.PORT || '8000';
+async function makeSession() {
+  const session = new SessionManager();
+  await session.createSession();
+}
 async function initialize() {
- await requireJS(path.join(__dirname, '/lib/Store/'));
- console.log('Syncing Database');
- await config.DATABASE.sync();
- console.log('⬇  Installing Plugins...');
- await requireJS(path.join(__dirname, '/plugins/'));
- await getandRequirePlugins();
- console.log('✅ Plugins Installed!');
- return await connect();
+  await requireJS(path.join(__dirname, '/lib/database/'));
+  await config.DATABASE.sync();
+  await requireJS(path.join(__dirname, '/plugins/'));
+  await getandRequirePlugins();
+  return await connect();
 }
 
-initialize();
+app.listen(PORT, async () => {
+  await makeSession();
+  await delay(5000);
+  return await initialize();
+});

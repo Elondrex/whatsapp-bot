@@ -1,43 +1,43 @@
-const os = require('os');
-const util = require('util');
-const { bot, Mode, runtime, commands, getJson, getBuffer } = require('../lib');
+const axios = require('axios');
 const { TIME_ZONE } = require('../config');
 const { exec } = require('child_process');
-
-function getRAMUsage() {
- const totalMemory = os.totalmem();
- const freeMemory = os.freemem();
- const usedMemory = totalMemory - freeMemory;
- return `${(usedMemory / 1024 / 1024 / 1024).toFixed(2)} GB / ${(totalMemory / 1024 / 1024 / 1024).toFixed(2)} GB`;
-}
-
-function getOS() {
- const osType = os.type();
- switch (osType) {
-  case 'Linux':
-   return 'Linux';
-  case 'Darwin':
-   return 'MacOS';
-  case 'Windows_NT':
-   return 'Windows';
-  default:
-   return 'VPS';
- }
-}
+const { bot, tiny, runtime, commands, getOS, getRAMUsage, PluginDB, installPlugin, images } = require('../utils');
 
 bot(
- {
-  pattern: 'menu',
-  fromMe: Mode,
-  description: 'Show All Commands',
-  dontAddCommandList: true,
- },
- async (message) => {
-  const { prefix, pushName, jid } = message;
-  const currentTime = new Date().toLocaleTimeString('en-IN', { timeZone: TIME_ZONE });
-  const currentDay = new Date().toLocaleDateString('en-US', { weekday: 'long' });
-  const currentDate = new Date().toLocaleDateString('en-IN', { timeZone: TIME_ZONE });
-  let menuText = `╭─ ғxᴏᴘʀɪsᴀ ᴍᴅ ───
+  {
+    pattern: 'ping',
+    fromMe: false,
+    desc: 'Bot response in milliseconds.',
+    type: 'system',
+  },
+  async (message) => {
+    const start = new Date().getTime();
+    const pingMsg = await message.reply('Pinging...');
+    const end = new Date().getTime();
+    const responseTime = (end - start) / 1000;
+    await pingMsg.edit(`*sᴘᴇᴇᴅ ${responseTime} sᴇᴄs*`);
+  }
+);
+
+bot(
+  {
+    pattern: 'menu',
+    fromMe: false,
+    description: 'Show All Commands',
+    dontAddCommandList: true,
+  },
+  async (message, match, m, client) => {
+    const { prefix, pushName } = message;
+    const currentTime = new Date().toLocaleTimeString('en-IN', {
+      timeZone: TIME_ZONE,
+    });
+    const currentDay = new Date().toLocaleDateString('en-US', {
+      weekday: 'long',
+    });
+    const currentDate = new Date().toLocaleDateString('en-IN', {
+      timeZone: TIME_ZONE,
+    });
+    let menuText = `\`\`\`╭─ ғxᴏᴘʀɪsᴀ ᴍᴅ ───
 │ Prefix: ${prefix}
 │ User: ${pushName}
 │ Os: ${getOS()}
@@ -48,156 +48,151 @@ bot(
 │ Day: ${currentDay}
 │ Date: ${currentDate}
 │ Version: ${require('../package.json').version}
-╰────────────────\n`;
+╰────────────────\`\`\`\n`;
 
-  const categorized = commands
-   .filter((cmd) => cmd.pattern && !cmd.dontAddCommandList)
-   .map((cmd) => ({
-    name: cmd.pattern.toString().split(/\W+/)[2],
-    category: cmd.type?.toLowerCase() || 'misc',
-   }))
-   .reduce((acc, { name, category }) => {
-    acc[category] = (acc[category] || []).concat(name);
-    return acc;
-   }, {});
+    const categorized = commands
+      .filter((cmd) => cmd.pattern && !cmd.dontAddCommandList)
+      .map((cmd) => ({
+        name: cmd.pattern.toString().split(/\W+/)[2],
+        category: cmd.type?.toLowerCase() || 'misc',
+      }))
+      .reduce((acc, { name, category }) => {
+        acc[category] = (acc[category] || []).concat(name);
+        return acc;
+      }, {});
 
-  Object.keys(categorized)
-   .sort()
-   .forEach((category) => {
-    menuText += `\n╭── ${category} ────\n│ ${categorized[category].sort().join('\n│ ')}\n╰──────────────\n`;
-   });
-
-  return await message.sendMessage(jid, '```' + menuText.trim() + '```');
- }
-);
-
-bot(
- {
-  pattern: 'list',
-  fromMe: Mode,
-  description: 'Show All Commands',
-  dontAddCommandList: true,
- },
- async (message, query, { prefix }) => {
-  let commandListText = '\t\t```Command List```\n';
-  const commandList = [];
-
-  commands.forEach((command) => {
-   if (command.pattern && !command.dontAddCommandList) {
-    const commandName = command.pattern.toString().split(/\W+/)[2];
-    const description = command.desc || command.info || 'No description available';
-    commandList.push({ name: commandName, description });
-   }
-  });
-
-  commandList.sort((a, b) => a.name.localeCompare(b.name));
-  commandList.forEach(({ name, description }, index) => {
-   commandListText += `\`\`\`${index + 1} ${name.trim()}\`\`\`\n`;
-   commandListText += `Use: \`\`\`${description}\`\`\`\n\n`;
-  });
-
-  return await message.sendMessage(message.jid, commandListText.trim());
- }
-);
-
-bot(
- {
-  pattern: 'reboot',
-  fromMe: true,
-  info: 'Restarts the Bot',
-  type: 'system',
- },
- async (message, match, m, client) => {
-  await message.sendReply('_Restarting..._');
-  await process.exit(1);
- }
-);
-
-bot(
- {
-  pattern: 'shutdown',
-  fromMe: true,
-  info: 'Shutdown the bot',
-  type: 'system',
- },
- async (m) => {
-  await m.sendReply('_Shutting Down_');
-  await exec(require('../package.json').scripts.stop);
- }
-);
-
-bot(
- {
-  pattern: 'ping',
-  fromMe: Mode,
-  desc: 'Bot response in milliseconds.',
-  type: 'system',
- },
- async (message) => {
-  const start = new Date().getTime();
-  const msg = await message.reply('');
-  const end = new Date().getTime();
-  const responseTime = (end - start) / 1000;
-  await msg.edit(`ʟᴀᴛᴇɴᴄʏ: ${responseTime} sᴇᴄs`);
- }
-);
-
-bot(
- {
-  pattern: 'runtime',
-  fromMe: Mode,
-  desc: 'Check uptime of bot',
-  type: 'system',
- },
- async (message, match) => {
-  message.send(`*Uptime:* ${runtime(process.uptime())}`);
- }
-);
-
-bot(
- {
-  on: 'text',
-  fromMe: true,
-  dontAddCommandList: true,
- },
- async (message, match, m, client) => {
-  const content = message.text;
-  if (!content) return;
-  if (!(content.startsWith('>') || content.startsWith('$') || content.startsWith('^'))) return;
-
-  const evalCmd = content.slice(1).trim();
-
-  try {
-   const scope = {
-    message,
-    match,
-    m,
-    client,
-    console,
-    require,
-    process,
-    Buffer,
-    fetch,
-    Promise,
-    getJson,
-    getBuffer,
-   };
-
-   const asyncEval = new Function(...Object.keys(scope), `return (async () => { return ${evalCmd}; })();`);
-
-   const result = await asyncEval(...Object.values(scope));
-
-   if (result === undefined) {
-    await message.reply('No result');
-   } else if (typeof result === 'function') {
-    await message.reply(result.toString());
-   } else if (typeof result === 'object') {
-    await message.reply(util.inspect(result, { depth: 2, colors: true }) || 'No result');
-   } else {
-    await message.reply(result.toString());
-   }
-  } catch (error) {
-   await message.reply(`Error: ${error.message}`);
+    Object.keys(categorized)
+      .sort()
+      .forEach((category) => {
+        menuText += tiny(`\n╭── *${category}* ────\n│ ${categorized[category].sort().join('\n│ ')}\n╰──────────────\n`);
+      });
+    const media = await images();
+    return message.send(media, {
+      caption: menuText,
+    });
   }
- }
+);
+
+bot(
+  {
+    pattern: 'list',
+    fromMe: false,
+    description: 'Show All Commands',
+    dontAddCommandList: true,
+  },
+  async (message) => {
+    let commandListText = '*about commands*\n';
+    const commandList = [];
+    commands.forEach((command) => {
+      if (command.pattern && !command.dontAddCommandList) {
+        const commandName = command.pattern.toString().split(/\W+/)[2];
+        const description = command.desc || command.info || 'No description available';
+        commandList.push({
+          name: commandName,
+          description,
+        });
+      }
+    });
+    commandList.sort((a, b) => a.name.localeCompare(b.name));
+    commandList.forEach(({ name, description }, index) => {
+      commandListText += `\`\`\`${index + 1} ${name.trim()}\`\`\`\n`;
+      commandListText += `Use: \`\`\`${description}\`\`\`\n\n`;
+    });
+    return await message.reply(tiny(commandListText));
+  }
+);
+
+bot(
+  {
+    pattern: 'restart',
+    fromMe: true,
+    info: 'Restarts the Bot',
+    type: 'system',
+  },
+  async (message, match, m, client) => {
+    await message.reply('_Restarting..._');
+    await process.exit(1);
+  }
+);
+
+bot(
+  {
+    pattern: 'shutdown',
+    fromMe: true,
+    info: 'Shutdown the bot',
+    type: 'system',
+  },
+  async (m) => {
+    await m.reply('_Shutting Down_');
+    await exec(require('../package.json').scripts.stop);
+  }
+);
+
+bot(
+  {
+    pattern: 'runtime',
+    fromMe: false,
+    desc: 'Check uptime of bot',
+    type: 'system',
+  },
+  async (message, match) => {
+    const alive = `*runtime:* ${runtime(process.uptime())}`;
+    return await message.reply(tiny(alive));
+  }
+);
+
+bot(
+  {
+    pattern: 'install',
+    fromMe: true,
+    desc: 'Installs External plugins',
+    type: 'system',
+  },
+  async (message, match, m, client) => {
+    if (!match) return message.reply('_Provide Plugin URl_');
+    let url = new URL(match);
+    if (url.host === 'gist.github.com') url = `https://gist.githubusercontent.com${url.pathname}/raw`;
+    const { data } = await axios.get(url);
+    const plugin_name = data.match(/(?<=pattern:) ["'](.*?)["']/)?.[1]?.split(' ')?.[0] || `__${Math.random().toString(36).slice(2)}`;
+    fs.writeFileSync(`${__dirname}/${plugin_name}.js`, data);
+    require(`./${plugin_name}`);
+    await installPlugin(url, plugin_name);
+    message.send(`_Installed: ${plugin_name}_`);
+  }
+);
+
+bot(
+  {
+    pattern: 'plugin',
+    fromMe: true,
+    desc: 'plugin list',
+    type: 'system',
+  },
+  async (message, match, m, client) => {
+    const plugins = await PluginDB.findAll();
+    if (plugins.length < 1) return message.send('_External Plugins Not Found_');
+    message.send(plugins.map((p) => `\`\`\`${p.dataValues.name}\`\`\`: ${p.dataValues.url}`).join('\n'));
+  }
+);
+
+bot(
+  {
+    pattern: 'remove',
+    fromMe: true,
+    desc: 'Remove external plugins',
+    type: 'system',
+  },
+  async (message, match, m, client) => {
+    if (!match) return message.sendMessage('_Need a plugin name_');
+    const plugin = await PluginDB.findOne({
+      where: {
+        name: match,
+      },
+    });
+    if (!plugin) return message.sendMessage('_Plugin not found_');
+    await plugin.destroy();
+    delete require.cache[require.resolve(`./${match}.js`)];
+    fs.unlinkSync(`${__dirname}/${match}.js`);
+    message.sendMessage(`Plugin ${match} deleted`);
+  }
 );
